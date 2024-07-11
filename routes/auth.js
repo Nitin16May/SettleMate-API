@@ -8,6 +8,14 @@ const jwtSecret = process.env.jwtSecret;
 const multer = require('multer');
 const { google } = require('googleapis');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
+const transporter = nodemailer.createTransport({
+	service: 'gmail',
+	auth: {
+		user: process.env.nodemailer_user,
+		pass: process.env.nodemailer_pass,
+	},
+});
 
 const storage = multer.diskStorage({
 	destination: function (req, file, cb) {
@@ -39,7 +47,7 @@ router.post(
 		body('password')
 			.notEmpty()
 			.withMessage('Password is required')
-			.matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/)
+			// .matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/)
 			.withMessage('Password must contain at least one letter, one number, and be at least 8 characters long'),
 	],
 	async (req, res) => {
@@ -99,6 +107,28 @@ router.post(
 	}
 );
 
+router.post('/forgotPassword', [body('email').isEmail().withMessage('Valid email address is required!').trim()], async (req, res) => {
+	// console.log('hits');
+	const errors = validationResult(req);
+	if (!errors.isEmpty()) {
+		return res.json({ errors: errors.array(), success: false });
+	}
+	let userData = await User.findOne({ email: req.body.email });
+	if (!userData) {
+		return res.json({ success: false, errors: [{ msg: 'No account found with this email address!' }] });
+	}
+	const user_id = jwt.sign({ id: userData._id }, jwtSecret, { expiresIn: '1h' });
+	const link = `${process.env.REACT_APP_FRONTEND_URL}/reset/${user_id}`;
+	const mail = {
+		from: 'settlemate@gmail.com',
+		to: req.body.email,
+		subject: 'SettleMate Reset Password',
+		html: '<p>Hello ' + userData.name + ' click here to <a href="' + link + '"> reset</a> your password. Valid for 1 hour. </p>',
+	};
+	transporter.sendMail(mail);
+	res.json({ success: true });
+});
+
 router.post('/uploadDrive', upload.array('files'), async (req, res) => {
 	const credentialsJson = Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString('utf-8');
 	const credentials = JSON.parse(credentialsJson);
@@ -146,5 +176,34 @@ router.post('/uploadDrive', upload.array('files'), async (req, res) => {
 	}
 	res.json({ files: uploadedFiles });
 });
+
+router.post(
+	'/changePassword',
+	[
+		body('password')
+			.notEmpty()
+			.withMessage('Password is required')
+			// .matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/)
+			.withMessage('Password must contain at least one letter, one number, and be at least 8 characters long'),
+	],
+	async (req, res) => {
+		const errors = validationResult(req);
+		if (!errors.isEmpty()) {
+			return res.json({ errors: errors.array(), success: false });
+		}
+		const salt = await bcrypt.genSalt(10);
+		let secPass = await bcrypt.hash(req.body.password, salt);
+		try {
+			let json = jwt.decode(req.body.json, jwtSecret);
+			// console.log(json);
+			let user = await User.findById(json.id);
+			user.password = secPass;
+			user.save().then(() => res.json({ success: true }));
+		} catch (error) {
+			console.log(error);
+			res.json({ success: false, errors: [{ msg: 'Backend Error, Contact Admin' }] });
+		}
+	}
+);
 
 module.exports = router;

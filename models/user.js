@@ -50,9 +50,7 @@ userSchema.methods.addInvite = function (tripTBA) {
 	return this.save();
 };
 userSchema.methods.removeInvite = function (tripTBR) {
-	this.invites = this.invites.filter(
-		tripId => tripId.toString() !== tripTBR.toString()
-	);
+	this.invites = this.invites.filter(tripId => tripId.toString() !== tripTBR.toString());
 	return this.save();
 };
 module.exports = mongoose.model('User', userSchema);
