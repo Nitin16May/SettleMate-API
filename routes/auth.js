@@ -125,7 +125,7 @@ router.post('/forgotPassword', [body('email').isEmail().withMessage('Valid email
 		subject: 'SettleMate Reset Password',
 		html: '<p>Hello ' + userData.name + ' click here to <a href="' + link + '"> reset</a> your password. Valid for 1 hour. </p>',
 	};
-	transporter.sendMail(mail);
+	await transporter.sendMail(mail);
 	res.json({ success: true });
 });
 
