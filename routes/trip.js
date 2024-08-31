@@ -255,10 +255,10 @@ router.post('/getTripTransfers', [], async (req, res, next) => {
 	const trip = await Trip.findById(req.body.tripid).select('transfersUpdated transfers transactions').populate('transactions');
 	// console.log(trip);
 	// console.log(trip.transfersUpdated);
-	if (trip.transfersUpdated) {
-		next();
-		return;
-	}
+	// if (trip.transfersUpdated) {
+	// 	next();
+	// 	return;
+	// }
 	const net = new Map();
 	// console.log(trip.transactions);
 	for (let i in trip.transactions) {
@@ -273,17 +273,19 @@ router.post('/getTripTransfers', [], async (req, res, next) => {
 	}
 	// console.log(net);
 	const senders = new PriorityQueue((a, b) => {
-		if (a.amt > b.amt) return 1;
+		if (a.amt < b.amt) return 1;
 		return -1;
 	});
 	const receivers = new PriorityQueue((a, b) => {
-		if (a.amt > b.amt) return 1;
+		if (a.amt < b.amt) return 1;
 		return -1;
 	});
 	net.forEach(function (value, key) {
-		if (value < 0) receivers.enqueue({ amt: value, who: key });
+		if (value < 0) receivers.enqueue({ amt: value * -1, who: key });
 		if (value > 0) senders.enqueue({ amt: value, who: key });
 	});
+	console.log(receivers);
+	console.log(senders);
 	trip.transfers = [];
 	while (!senders.isEmpty()) {
 		let s = senders.dequeue();
@@ -292,13 +294,18 @@ router.post('/getTripTransfers', [], async (req, res, next) => {
 		let rd = r.who;
 		let sa = s.amt;
 		let ra = r.amt;
-		ra = ra * -1;
-		if (ra == sa) trip.transfers.push({ from: sd, amt: sa, to: rd });
-		else if (ra > sa) {
+		// console.log(sd + ' ' + sa);
+		// console.log(rd + ' ' + ra);
+		if (ra === sa) {
 			trip.transfers.push({ from: sd, amt: sa, to: rd });
-			receivers.enqueue({ amt: sa - ra, who: rd });
+			// console.log(sd, sa, rd);
+		} else if (ra > sa) {
+			trip.transfers.push({ from: sd, amt: sa, to: rd });
+			// console.log(sd, sa, rd);
+			receivers.enqueue({ amt: ra - sa, who: rd });
 		} else {
 			trip.transfers.push({ from: sd, amt: ra, to: rd });
+			// console.log(sd, ra, rd);
 			senders.enqueue({ amt: sa - ra, who: sd });
 		}
 	}
